@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS Battle - 2v2 联网对战</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #fff; overflow: hidden; }
+
+        /* 主菜单 */
+        #menu {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 100;
+        }
+        #menu.hidden { display: none; }
+        .menu-title {
+            font-size: 4rem; font-weight: bold; margin-bottom: 10px;
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(233, 69, 96, 0.5);
+        }
+        .menu-subtitle { color: #888; margin-bottom: 40px; font-size: 1.2rem; }
+
+        .menu-section { margin: 20px 0; text-align: center; }
+        .menu-section h3 { color: #e94560; margin-bottom: 15px; font-size: 1.1rem; }
+
+        .input-group { margin: 10px 0; }
+        .input-group input {
+            padding: 12px 20px; font-size: 1rem; border: 2px solid #333;
+            border-radius: 8px; background: #0a0a15; color: #fff; width: 280px;
+            transition: border-color 0.3s;
+        }
+        .input-group input:focus { outline: none; border-color: #e94560; }
+
+        /* 角色选择 */
+        .character-select { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
+        .character-card {
+            width: 120px; padding: 15px; background: #0a0a15; border: 2px solid #333;
+            border-radius: 12px; cursor: pointer; transition: all 0.3s; text-align: center;
+        }
+        .character-card:hover { border-color: #666; transform: translateY(-3px); }
+        .character-card.selected { border-color: #e94560; background: #1a0a15; }
+        .character-card .icon { font-size: 2.5rem; margin-bottom: 8px; }
+        .character-card .name { font-weight: bold; font-size: 0.9rem; }
+        .character-card .stats { font-size: 0.75rem; color: #888; margin-top: 5px; }
+
+        .btn {
+            padding: 15px 50px; font-size: 1.2rem; font-weight: bold;
+            border: none; border-radius: 8px; cursor: pointer;
+            transition: all 0.3s; margin-top: 30px;
+        }
+        .btn-primary {
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            color: #fff;
+        }
+        .btn-primary:hover { transform: scale(1.05); box-shadow: 0 5px 20px rgba(233, 69, 96, 0.4); }
+
+        /* 游戏 UI */
+        #gameUI { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        #gameUI.hidden { display: none; }
+
+        .hud-top {
+            display: flex; justify-content: space-between; padding: 15px 20px;
+            background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+        }
+        .team-score {
+            display: flex; align-items: center; gap: 15px;
+            font-size: 1.5rem; font-weight: bold;
+        }
+        .team-ct { color: #4a9eff; }
+        .team-t { color: #ff6b4a; }
+        .round-info { text-align: center; }
+        .round-num { font-size: 1.2rem; color: #888; }
+
+        .hud-bottom {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            padding: 15px 20px;
+            background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+            display: flex; justify-content: space-between; align-items: flex-end;
+        }
+        .health-bar {
+            width: 250px; height: 25px; background: #333; border-radius: 4px; overflow: hidden;
+        }
+        .health-fill { height: 100%; background: linear-gradient(90deg, #e94560, #ff6b6b); transition: width 0.3s; }
+        .health-text { margin-top: 5px; font-size: 0.9rem; }
+
+        .ammo-info { text-align: right; }
+        .ammo-count { font-size: 2rem; font-weight: bold; }
+        .ammo-max { color: #888; }
+
+        .crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 4px; height: 4px; background: #fff;
+            border-radius: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 0 0 1px #000, 0 0 0 2px rgba(255,255,255,0.5);
+        }
+
+        .kill-feed {
+            position: absolute; top: 80px; right: 20px;
+            display: flex; flex-direction: column; gap: 5px;
+        }
+        .kill-item {
+            background: rgba(0,0,0,0.7); padding: 8px 15px; border-radius: 4px;
+            font-size: 0.85rem; animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+        .player-list {
+            position: absolute; top: 80px; left: 20px;
+            background: rgba(0,0,0,0.6); padding: 10px; border-radius: 8px;
+            min-width: 150px;
+        }
+        .player-item { padding: 5px 0; font-size: 0.85rem; display: flex; justify-content: space-between; }
+        .player-item.dead { opacity: 0.5; text-decoration: line-through; }
+
+        .center-message {
+            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 2.5rem; font-weight: bold; text-align: center;
+            text-shadow: 2px 2px 4px #000;
+        }
+
+        /* 等待界面 */
+        #waitingScreen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 50;
+        }
+        #waitingScreen.hidden { display: none; }
+        .waiting-title { font-size: 2rem; margin-bottom: 20px; }
+        .waiting-players { margin: 20px 0; }
+        .waiting-player { padding: 10px 20px; margin: 5px; background: #222; border-radius: 8px; }
+        .spinner { width: 40px; height: 40px; border: 3px solid #333; border-top-color: #e94560; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="menu">
+        <h1 class="menu-title">CS BATTLE</h1>
+        <p class="menu-subtitle">2v2 在线对战</p>
+
+        <div class="menu-section">
+            <h3>玩家信息</h3>
+            <div class="input-group">
+                <input type="text" id="playerName" placeholder="输入你的名字" maxlength="12">
+            </div>
+            <div class="input-group">
+                <input type="text" id="roomId" placeholder="房间号 (留空自动匹配)" maxlength="10">
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <h3>选择角色</h3>
+            <div class="character-select" id="characterSelect">
+                <div class="character-card selected" data-char="soldier">
+                    <div class="icon">🎖️</div>
+                    <div class="name">突击兵</div>
+                    <div class="stats">均衡型 | 100HP</div>
+                </div>
+                <div class="character-card" data-char="sniper">
+                    <div class="icon">🎯</div>
+                    <div class="name">狙击手</div>
+                    <div class="stats">高伤害 | 80HP</div>
+                </div>
+                <div class="character-card" data-char="tank">
+                    <div class="icon">🛡️</div>
+                    <div class="name">重装兵</div>
+                    <div class="stats">高血量 | 150HP</div>
+                </div>
+                <div class="character-card" data-char="scout">
+                    <div class="icon">⚡</div>
+                    <div class="name">侦察兵</div>
+                    <div class="stats">高速度 | 90HP</div>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" id="joinBtn">加入战斗</button>
+    </div>
+
+    <div id="waitingScreen" class="hidden">
+        <div class="spinner"></div>
+        <h2 class="waiting-title">等待玩家加入...</h2>
+        <div class="waiting-players" id="waitingPlayers"></div>
+        <p style="color: #888;">房间号: <span id="displayRoomId"></span></p>
+    </div>
+
+    <div id="gameUI" class="hidden">
+        <div class="hud-top">
+            <div class="team-score team-ct">CT <span id="scoreCT">0</span></div>
+            <div class="round-info">
+                <div class="round-num">第 <span id="roundNum">1</span> 回合</div>
+            </div>
+            <div class="team-score team-t"><span id="scoreT">0</span> T</div>
+        </div>
+
+        <div class="crosshair"></div>
+
+        <div class="kill-feed" id="killFeed"></div>
+        <div class="player-list" id="playerList"></div>
+
+        <div class="center-message" id="centerMessage"></div>
+
+        <div class="hud-bottom">
+            <div>
+                <div class="health-bar"><div class="health-fill" id="healthFill" style="width: 100%"></div></div>
+                <div class="health-text">❤️ <span id="healthText">100</span> / <span id="maxHealthText">100</span></div>
+            </div>
+            <div class="ammo-info">
+                <div><span class="ammo-count" id="ammoCount">30</span> <span class="ammo-max">/ 30</span></div>
+                <div style="color: #888; font-size: 0.8rem;">[R] 换弹</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
